@@ -29,7 +29,45 @@ include(CMakeParseArguments)
 
 function(target_precompiled_header) # target [...] header
                                     # [REUSE reuse_target] [TYPE type]
-	set(lang ${CMAKE_PCH_COMPILER_LANGUAGE})
+
+	cmake_parse_arguments(ARGS "" "REUSE;TYPE" "" ${ARGN})
+	if(ARGS_SHARED)
+		set(ARGS_REUSE ${ARGS_SHARED})
+	endif()
+	list(GET ARGS_UNPARSED_ARGUMENTS -1 header)
+	list(REMOVE_AT ARGS_UNPARSED_ARGUMENTS -1)
+	if(ARGS_REUSE AND NOT TARGET "${ARGS_REUSE}")
+		message(SEND_ERROR "Re-use target \"${ARGS_REUSE}\" does not exist.")
+		return()
+	endif()
+	if(NOT ARGS_REUSE)
+		#detect language to use when adding the pch target
+		if (ARGS_TYPE)
+			#language explicitly provided
+			if (ARGS_TYPE STREQUAL c-header)
+				set(lang "C")
+			elseif(ARGS_TYPE STREQUAL c++-header)
+				set(lang "CXX")
+			else()
+				message(WARNING "Unknown header type for language ${lang}")
+				set(lang "CXX")
+			endif()
+		else()
+			#detect language from the language of the project
+			if (list(LENGTH CMAKE_PCH_COMPILER_LANGUAGE) != 1)
+				message(SEND_ERROR "For multi-language project an explicit `TYPE` argument must be \ provided when adding a precompiled header")
+			else()
+				set(lang ${CMAKE_PCH_COMPILER_LANGUAGE})
+			endif()
+		endif()
+	else()
+		#Use the language defined in the reused pch target
+		get_target_property(lang ${header} LANGUAGE)
+		if (NOT MSVC)
+			string(REGEX REPALCE "PCH$" "" ${lang} lang)
+		endif()
+	endif()
+
 	if(NOT MSVC AND
 		NOT CMAKE_COMPILER_IS_GNU${lang} AND
 		NOT CMAKE_${lang}_COMPILER_ID STREQUAL "GNU" AND
@@ -41,16 +79,7 @@ function(target_precompiled_header) # target [...] header
 			)
 		return()
 	endif()
-	cmake_parse_arguments(ARGS "" "REUSE;TYPE" "" ${ARGN})
-	if(ARGS_SHARED)
-		set(ARGS_REUSE ${ARGS_SHARED})
-	endif()
-	list(GET ARGS_UNPARSED_ARGUMENTS -1 header)
-	list(REMOVE_AT ARGS_UNPARSED_ARGUMENTS -1)
-	if(ARGS_REUSE AND NOT TARGET "${ARGS_REUSE}")
-		message(SEND_ERROR "Re-use target \"${ARGS_REUSE}\" does not exist.")
-		return()
-	endif()
+
 	foreach(target ${ARGS_UNPARSED_ARGUMENTS})
 		if(NOT TARGET "${target}")
 			message(SEND_ERROR "Target \"${target}\" does not exist.")
@@ -77,9 +106,6 @@ function(target_precompiled_header) # target [...] header
 			elseif(lang STREQUAL C)
 				set(header_type "c-header")
 			elseif(lang STREQUAL CXX)
-				set(header_type "c++-header")
-			else()
-				message(WARNING "Unknown header type for language ${lang}")
 				set(header_type "c++-header")
 			endif()
 			if(MSVC)
