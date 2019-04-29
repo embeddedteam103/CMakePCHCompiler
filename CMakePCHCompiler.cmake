@@ -107,7 +107,9 @@ function(target_precompiled_header) # target [...] header
 		endif()
 
 		get_target_property(target_libraries ${target} LINK_LIBRARIES)
-		set_target_properties(${pch_target} PROPERTIES LINK_LIBRARIES "${target_libraries}")
+		if (NOT ARGS_REUSE)
+			set_target_properties(${pch_target} PROPERTIES LINK_LIBRARIES "${target_libraries}")
+		endif()
 
 		add_dependencies(${target} ${pch_target})
 
